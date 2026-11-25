@@ -322,13 +322,16 @@ function toCSV(data){
 }
 function downloadCSV(data){
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob(["﻿"+toCSV(data)], {type:"text/csv"}));
+  a.href = URL.createObjectURL(new Blob(["\uFEFF"+toCSV(data)], {type:"text/csv"}));
   a.download = `${session.participant}_${CONFIG.EXP_NAME}.csv`; a.click();
 }
 async function send(payload){
   // text/plain evita el preflight CORS con Apps Script
   const res = await fetch(CONFIG.ENDPOINT, {method:"POST", body: JSON.stringify(payload)});
-  const j = await res.json();
+  const txt = await res.text();
+  let j;
+  try { j = JSON.parse(txt); }
+  catch(_) { throw new Error("respuesta no válida del servidor (HTTP " + res.status + "). Revise que la implementación tenga acceso para «Cualquier usuario»"); }
   if (!j.ok) throw new Error(j.error || "Error del servidor");
   return j;
 }
@@ -342,25 +345,29 @@ async function finish(){
     st.textContent = "Modo local (sin servidor configurado): descargue el CSV.";
     $("#b-download").hidden = false; return;
   }
-  localStorage.setItem("cs_pending_"+session.participant, JSON.stringify(payload));   // respaldo
+  try { localStorage.setItem("cs_pending_"+session.participant, JSON.stringify(payload)); } catch(_) {}   // respaldo
   const attempt = async () => {
+    let lastErr = null;
     st.className = "status"; st.textContent = "Guardando respuestas…"; $("#b-retry").hidden = true;
     for (let i=0; i<3; i++){
       try { await send(payload);
-        localStorage.removeItem("cs_pending_"+session.participant);
+        try { localStorage.removeItem("cs_pending_"+session.participant); } catch(_) {}
         st.className = "status ok"; st.textContent = "Respuestas guardadas correctamente. Ya puede cerrar esta página."; return;
-      } catch(e){ await sleep(1500*(i+1)); }
+      } catch(e){ lastErr = e; await sleep(1500*(i+1)); }
     }
-    st.className = "status err"; st.textContent = "No se pudo enviar. Revise su conexión y pulse “Reintentar”. No cierre la página.";
+    st.className = "status err";
+    st.textContent = "No se pudo enviar. Motivo: " + (lastErr && lastErr.message ? lastErr.message : String(lastErr)) + ". Pulse “Reintentar”. No cierre la página.";
     $("#b-retry").hidden = false; $("#b-download").hidden = false;
   };
   $("#b-retry").onclick = attempt;
   attempt();
 }
 // Reenvío silencioso de envíos pendientes de sesiones anteriores en este dispositivo
-if (CONFIG.ENDPOINT) Object.keys(localStorage).filter(k=>k.startsWith("cs_pending_")).forEach(k => {
-  send(JSON.parse(localStorage.getItem(k))).then(()=>localStorage.removeItem(k)).catch(()=>{});
-});
+try {
+  if (CONFIG.ENDPOINT) Object.keys(localStorage).filter(k=>k.startsWith("cs_pending_")).forEach(k => {
+    send(JSON.parse(localStorage.getItem(k))).then(()=>localStorage.removeItem(k)).catch(()=>{});
+  });
+} catch(_) {}
 // Aviso si intenta salir a mitad de la prueba
 window.addEventListener("beforeunload", e => { if (rows.length && rows.length < trials.length){ e.preventDefault(); e.returnValue=""; } });
 </script>
