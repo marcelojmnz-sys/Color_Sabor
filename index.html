@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#808080">
+<title>Estudio color–sabor</title>
+<style>
+  /* Fondo gris medio = rgb [0,0,0] de PsychoPy → #808080 (mismo contexto de adaptación que el original) */
+  :root{
+    --bg:#808080; --ink:#FFFFFF; --ink-soft:#EDEDED;
+    --card:#6E6E6E; --btn:#3A3A3A; --btn-hover:#2B2B2B; --btn-ink:#FFFFFF;
+    --accent:#1F1F1F; --line:#9A9A9A; --ok:#2E7D32; --err:#B3261E;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+    font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+  body{display:flex;justify-content:center;overscroll-behavior:none}
+  main{width:100%;max-width:520px;min-height:100%;padding:max(16px,env(safe-area-inset-top)) 18px max(18px,env(safe-area-inset-bottom));
+    display:flex;flex-direction:column}
+  .screen{display:none;flex:1;flex-direction:column;gap:14px}
+  .screen.active{display:flex}
+  h1{font-size:1.45rem;margin:.4rem 0 .2rem;font-weight:650}
+  h2{font-size:1.1rem;margin:.2rem 0;font-weight:600}
+  p{margin:.2rem 0}
+  .muted{color:var(--ink-soft);font-size:.92rem}
+  .panel{background:var(--card);border-radius:var(--radius);padding:14px 16px}
+  ul.tastes{list-style:none;padding:0;margin:0;display:grid;gap:8px}
+  label{display:block;font-size:.95rem;margin:.5rem 0 .2rem}
+  select,input[type=number],input[type=text]{width:100%;padding:12px;border-radius:10px;border:1px solid var(--line);
+    background:#F4F4F4;color:#111;font-size:1rem}
+  .check{display:flex;gap:10px;align-items:flex-start;margin:.5rem 0}
+  .check input{width:22px;height:22px;margin-top:2px;flex:none;accent-color:var(--accent)}
+  .spacer{flex:1}
+  button{font:inherit;border:0;cursor:pointer;border-radius:var(--radius);touch-action:manipulation}
+  .primary{background:var(--accent);color:#fff;padding:16px;font-size:1.08rem;font-weight:600;width:100%}
+  .primary:disabled{opacity:.4;cursor:not-allowed}
+  .link{background:none;color:var(--ink);text-decoration:underline;padding:6px}
+
+  /* ---- Ensayo ---- */
+  #trial{align-items:center;gap:12px}
+  .progress{width:100%;height:6px;background:#6A6A6A;border-radius:3px;overflow:hidden}
+  .progress > div{height:100%;width:0;background:#F4F4F4;transition:width .25s}
+  .counter{align-self:flex-end;font-size:.85rem;color:var(--ink-soft);margin-top:-6px}
+  .question{font-size:1.15rem;text-align:center;margin:4px 0 0;font-weight:550}
+  #swatch{width:min(62vw,34vh,300px);aspect-ratio:1;border-radius:6px;background:var(--bg);
+    box-shadow:0 0 0 1px rgba(255,255,255,.25)}
+  #choices{width:100%;display:grid;gap:10px;margin-top:6px}
+  #choices button{background:var(--btn);color:var(--btn-ink);padding:15px 14px;font-size:1.12rem;font-weight:600;
+    display:flex;align-items:center;justify-content:space-between;min-height:56px}
+  #choices button .k{font-size:.8rem;opacity:.55;font-weight:500}
+  #choices button:active,#choices button.sel{background:var(--btn-hover);outline:3px solid #F4F4F4}
+  #choices.locked button{pointer-events:none}
+  .blank #swatch,.blank .question,.blank #choices{visibility:hidden}
+
+  dialog{border:0;border-radius:var(--radius);max-width:min(92vw,480px);padding:18px;background:#4A4A4A;color:#fff}
+  dialog::backdrop{background:rgba(0,0,0,.45)}
+  .status{padding:12px 14px;border-radius:10px;background:var(--card)}
+  .status.ok{background:var(--ok)} .status.err{background:var(--err)}
+  @media (hover:hover){ #choices button:hover{background:var(--btn-hover)} }
+  @media (min-width:700px){ #choices .k{opacity:.75} }
+</style>
+</head>
+<body>
+<main>
+
+  <!-- 1. Bienvenida + consentimiento -->
+  <section class="screen active" id="s-welcome">
+    <h1>Estudio de asociación color–sabor</h1>
+    <p>Gracias por participar. Verá una serie de colores y para cada uno elegirá el sabor con el que lo relaciona de forma espontánea. Toma unos <b>5 minutos</b>.</p>
+    <div class="panel muted">
+      La participación es voluntaria y anónima. Solo se registran sus respuestas, el tiempo de respuesta y datos técnicos de la pantalla. Puede abandonar en cualquier momento cerrando la página.
+    </div>
+    <div class="check"><input type="checkbox" id="consent"><label for="consent">He leído la información y acepto participar.</label></div>
+    <div class="spacer"></div>
+    <button class="primary" id="b-welcome" disabled>Continuar</button>
+  </section>
+
+  <!-- 2. Datos del participante -->
+  <section class="screen" id="s-demo">
+    <h1>Algunos datos</h1>
+    <label for="edad">Edad</label>
+    <input type="number" id="edad" inputmode="numeric" min="12" max="99" placeholder="Años">
+    <label for="sexo">Sexo</label>
+    <select id="sexo">
+      <option value="">Seleccione…</option><option>Femenino</option><option>Masculino</option>
+      <option>Otro</option><option>Prefiero no decir</option>
+    </select>
+    <label for="vision">¿Tiene alguna dificultad para distinguir colores (daltonismo)?</label>
+    <select id="vision">
+      <option value="">Seleccione…</option><option>No</option><option>Sí</option><option>No sé</option>
+    </select>
+    <h2 style="margin-top:1rem">Antes de empezar</h2>
+    <div class="check"><input type="checkbox" id="screenok"><label for="screenok">Subí el brillo de la pantalla y desactivé el modo nocturno / filtro de luz azul.</label></div>
+    <div class="spacer"></div>
+    <button class="primary" id="b-demo" disabled>Continuar</button>
+  </section>
+
+  <!-- 3. Instrucciones -->
+  <section class="screen" id="s-instr">
+    <h1>Instrucciones</h1>
+    <p>Se presentará un cuadro de color. Toque el sabor con el que lo relaciona. <b>No hay respuestas correctas o incorrectas</b>: responda según su primera impresión, lo más rápido posible.</p>
+    <div class="panel"><ul class="tastes" id="taste-defs"></ul></div>
+    <p class="muted" id="kbd-hint" hidden>En computadora también puede usar las teclas 1–5.</p>
+    <div class="spacer"></div>
+    <button class="primary" id="b-start">Comenzar</button>
+  </section>
+
+  <!-- 4. Ensayo -->
+  <section class="screen" id="trial">
+    <div class="progress"><div id="bar"></div></div>
+    <div class="counter" id="counter"></div>
+    <p class="question">¿Con cuál sabor relaciona este color?</p>
+    <div id="swatch" aria-label="Estímulo de color"></div>
+    <div id="choices"></div>
+    <button class="link" id="b-defs" type="button">Ver definiciones</button>
+  </section>
+
+  <!-- 5. Fin -->
+  <section class="screen" id="s-end">
+    <h1>¡Muchas gracias!</h1>
+    <p>Su participación ha finalizado.</p>
+    <div class="status" id="send-status">Guardando respuestas…</div>
+    <button class="primary" id="b-retry" hidden>Reintentar envío</button>
+    <button class="link" id="b-download" hidden>Descargar mis respuestas (CSV)</button>
+  </section>
+
+</main>
+
+<dialog id="dlg-defs"><ul class="tastes" id="taste-defs-2"></ul>
+  <p style="text-align:right;margin-top:12px"><button class="primary" style="width:auto;padding:10px 18px" onclick="this.closest('dialog').close()">Cerrar</button></p>
+</dialog>
+
+<script>
+/* =====================================================================
+   CONFIGURACIÓN
+   ===================================================================== */
+const CONFIG = {
+  // URL del Web App de Google Apps Script (ver README). Vacío = modo local: descarga CSV.
+  ENDPOINT: "https://script.google.com/macros/s/AKfycbws7v_qC5bMNsaROQ4TwtfX1QCVJWnG-EkWMBVyduB_hj7qig4R_gBXu_bQ7EX2Bmz5/exec",
+  EXP_NAME: "color_sabor_v2",
+  RANDOMIZE_BUTTONS: true,   // orden de botones aleatorio por participante (fijo durante la sesión)
+  ISI_MS: 400,               // pantalla gris entre estímulos (reduce post-imágenes)
+  MIN_RT_MS: 150,            // toques antes de esto se ignoran (dobles toques accidentales)
+};
+
+// Sabores (texto de definiciones tomado del .psyexp original)
+const TASTES = [
+  {key:"Dulce",  def:"sabor agradable y suave, el que se percibe típicamente con el azúcar."},
+  {key:"Salado", def:"sabor que se percibe típicamente con la sal de mesa."},
+  {key:"Amargo", def:"sabor intenso y áspero, que suele quedar en el fondo de la boca."},
+  {key:"Ácido",  def:"sabor agudo y penetrante que hace salivar."},
+  {key:"Umami",  def:"sabor sabroso y profundo, que da sensación de plenitud y persiste en la boca. Se asocia con el glutamato."},
+];
+
+// Estímulos: Copia_de_estimulos_PsychoPy_45.xlsx (espacio rgb de PsychoPy, rango −1..1)
+const STIMULI = [
+  {id:"C01", familia:"Rojo", rgb:[0.167502,-0.587959,-0.332126]},
+  {id:"C02", familia:"Rojo", rgb:[0.775549,-0.496802,-0.607872]},
+  {id:"C03", familia:"Rojo", rgb:[0.620778,-0.586474,-0.561755]},
+  {id:"C04", familia:"Rojo", rgb:[0.778883,-0.156979,0.207856]},
+  {id:"C05", familia:"Rojo", rgb:[0.852634,-0.47894,-0.679198]},
+  {id:"C06", familia:"Naranja", rgb:[0.892102,-0.089049,-0.533648]},
+  {id:"C07", familia:"Naranja", rgb:[0.818863,0.026768,-0.312055]},
+  {id:"C08", familia:"Naranja", rgb:[1,0.139868,-0.373732]},
+  {id:"C09", familia:"Naranja", rgb:[0.904099,0.160161,-0.370844]},
+  {id:"C10", familia:"Naranja", rgb:[1,0.282343,-0.336882]},
+  {id:"C11", familia:"Amarillo", rgb:[1,0.605327,-0.096988]},
+  {id:"C12", familia:"Amarillo", rgb:[0.954646,0.484342,-1]},
+  {id:"C13", familia:"Amarillo", rgb:[1,0.69425,0.041677]},
+  {id:"C14", familia:"Amarillo", rgb:[0.634196,0.482942,-1]},
+  {id:"C15", familia:"Amarillo", rgb:[0.769339,0.429596,-0.618241]},
+  {id:"C16", familia:"Verde", rgb:[0.326206,0.75969,-0.621678]},
+  {id:"C17", familia:"Verde", rgb:[0.068006,0.114694,-0.555229]},
+  {id:"C18", familia:"Verde", rgb:[-0.334078,0.193683,-0.42973]},
+  {id:"C19", familia:"Verde", rgb:[-1,-0.028122,-0.234059]},
+  {id:"C20", familia:"Verde", rgb:[-0.172189,0.626873,0.480681]},
+  {id:"C21", familia:"Azul", rgb:[-1,0.01135,0.297576]},
+  {id:"C22", familia:"Azul", rgb:[-1,0.088082,0.061201]},
+  {id:"C23", familia:"Azul", rgb:[-1,-0.031512,0.697971]},
+  {id:"C24", familia:"Azul", rgb:[-1,-0.037697,0.72724]},
+  {id:"C25", familia:"Azul", rgb:[-0.092794,-0.087617,0.520337]},
+  {id:"C26", familia:"Morado", rgb:[0.411134,0.287047,0.618116]},
+  {id:"C27", familia:"Morado", rgb:[-0.028562,-0.450372,-0.037218]},
+  {id:"C28", familia:"Morado", rgb:[-0.050061,-0.164201,0.372824]},
+  {id:"C29", familia:"Morado", rgb:[0.429622,-0.43487,-0.044851]},
+  {id:"C30", familia:"Morado", rgb:[0.79871,-0.092029,0.23228]},
+  {id:"C31", familia:"Negro", rgb:[-0.544089,-0.517352,-0.125402]},
+  {id:"C32", familia:"Negro", rgb:[-0.496186,-0.515731,-0.37294]},
+  {id:"C33", familia:"Negro", rgb:[-0.476219,-0.482719,-0.490615]},
+  {id:"C34", familia:"Negro", rgb:[-0.596781,-0.284459,-0.076513]},
+  {id:"C35", familia:"Negro", rgb:[-0.56574,-0.340862,-0.499499]},
+  {id:"C36", familia:"Blanco", rgb:[0.946101,0.933088,0.879202]},
+  {id:"C37", familia:"Blanco", rgb:[0.938664,0.908756,0.827587]},
+  {id:"C38", familia:"Blanco", rgb:[0.967119,0.880286,0.276766]},
+  {id:"C39", familia:"Blanco", rgb:[0.763877,1,0.690445]},
+  {id:"C40", familia:"Blanco", rgb:[1,0.944685,0.917118]},
+  {id:"C41", familia:"Café", rgb:[0.756901,0.15522,-0.122242]},
+  {id:"C42", familia:"Café", rgb:[0.446576,-0.039012,-0.345883]},
+  {id:"C43", familia:"Café", rgb:[0.696476,0.106251,-0.518967]},
+  {id:"C44", familia:"Café", rgb:[0.537279,0.062855,-0.112384]},
+  {id:"C45", familia:"Café", rgb:[0.194322,-0.166445,-0.400812]}
+
+];
+
+/* =====================================================================
+   UTILIDADES
+   ===================================================================== */
+const $ = s => document.querySelector(s);
+const qs = new URLSearchParams(location.search);
+const shuffle = a => { a = a.slice(); for (let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; };
+// PsychoPy rgb (−1..1) → hex sRGB 8 bit
+const toHex = rgb => "#" + rgb.map(v => Math.round((v+1)/2*255).toString(16).padStart(2,"0")).join("").toUpperCase();
+const randId = () => (crypto.randomUUID ? crypto.randomUUID().slice(0,8) : Math.random().toString(36).slice(2,10));
+const show = id => { document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active")); $(id).classList.add("active"); window.scrollTo(0,0); };
+const nextFrame = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+/* =====================================================================
+   ESTADO DE SESIÓN
+   ===================================================================== */
+const session = {
+  participant: (qs.get("p") || qs.get("participant") || randId()).replace(/[^\w-]/g,"").slice(0,40),
+  session: qs.get("s") || "001",
+  source: qs.get("src") || "",
+  pilot: qs.has("pilot"),
+  start_iso: new Date().toISOString(),
+  user_agent: navigator.userAgent,
+  screen_w: screen.width, screen_h: screen.height, dpr: window.devicePixelRatio,
+  color_gamut_p3: matchMedia("(color-gamut: p3)").matches,
+  dark_mode: matchMedia("(prefers-color-scheme: dark)").matches,
+  touch: matchMedia("(pointer: coarse)").matches,
+  tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+};
+const buttonOrder = CONFIG.RANDOMIZE_BUTTONS ? shuffle(TASTES.map(t=>t.key)) : TASTES.map(t=>t.key);
+const trials = shuffle(STIMULI).map((s,i) => ({...s, n:i+1, hex:toHex(s.rgb)}));
+const rows = [];
+let defsViews = 0;
+
+/* =====================================================================
+   PANTALLAS PREVIAS
+   ===================================================================== */
+function fillDefs(el){ el.innerHTML = TASTES.map(t=>`<li><b>${t.key}:</b> ${t.def}</li>`).join(""); }
+fillDefs($("#taste-defs")); fillDefs($("#taste-defs-2"));
+if (!session.touch) $("#kbd-hint").hidden = false;
+
+$("#consent").onchange = e => $("#b-welcome").disabled = !e.target.checked;
+$("#b-welcome").onclick = () => show("#s-demo");
+
+const demoValid = () => $("#edad").value && $("#sexo").value && $("#vision").value && $("#screenok").checked;
+["#edad","#sexo","#vision","#screenok"].forEach(s => $(s).addEventListener("input", () => $("#b-demo").disabled = !demoValid()));
+$("#b-demo").onclick = () => {
+  Object.assign(session, {edad:+$("#edad").value, sexo:$("#sexo").value, vision_color:$("#vision").value});
+  show("#s-instr");
+};
+$("#b-defs").onclick = () => { defsViews++; $("#dlg-defs").showModal(); };
+
+/* =====================================================================
+   BUCLE DE ENSAYOS
+   ===================================================================== */
+$("#choices").innerHTML = buttonOrder.map((k,i) =>
+  `<button type="button" data-taste="${k}" data-pos="${i+1}"><span>${k}</span><span class="k">${session.touch?"":i+1}</span></button>`).join("");
+
+function waitResponse(){
+  return new Promise(resolve => {
+    const box = $("#choices");
+    const t0 = performance.now();
+    const done = (btn, via) => {
+      const rt = performance.now() - t0;
+      if (rt < CONFIG.MIN_RT_MS || $("#dlg-defs").open) return;
+      box.classList.add("locked"); btn.classList.add("sel");
+      box.removeEventListener("pointerup", onTap); document.removeEventListener("keydown", onKey);
+      resolve({taste:btn.dataset.taste, pos:+btn.dataset.pos, rt, via});
+    };
+    const onTap = e => { const b = e.target.closest("button"); if (b) done(b, e.pointerType || "pointer"); };
+    const onKey = e => { const k = parseInt(e.key,10); if (k>=1 && k<=buttonOrder.length) done(box.children[k-1], "keyboard"); };
+    box.addEventListener("pointerup", onTap); document.addEventListener("keydown", onKey);
+  });
+}
+
+async function runTrials(){
+  show("#trial");
+  const trialEl = $("#trial"), sw = $("#swatch");
+  for (const t of trials){
+    // ISI: pantalla gris
+    trialEl.classList.add("blank");
+    $("#choices").classList.remove("locked");
+    [...$("#choices").children].forEach(b=>b.classList.remove("sel"));
+    await sleep(CONFIG.ISI_MS);
+    sw.style.background = t.hex;
+    $("#counter").textContent = `${t.n} / ${trials.length}`;
+    $("#bar").style.width = `${(t.n-1)/trials.length*100}%`;
+    trialEl.classList.remove("blank");
+    await nextFrame();                       // asegura que el color ya se pintó antes de iniciar el reloj
+    const defsBefore = defsViews;
+    const r = await waitResponse();
+    rows.push({
+      exp_name: CONFIG.EXP_NAME, participant: session.participant, session: session.session,
+      trial_n: t.n, color_id: t.id, familia: t.familia,
+      r_psychopy: t.rgb[0], g_psychopy: t.rgb[1], b_psychopy: t.rgb[2], hex: t.hex,
+      sabor: r.taste, posicion_boton: r.pos, rt_ms: Math.round(r.rt), input: r.via,
+      vio_definiciones: defsViews > defsBefore, orden_botones: buttonOrder.join("|"),
+      timestamp: new Date().toISOString(),
+    });
+    await sleep(120);                        // feedback visual breve de la selección
+  }
+  $("#bar").style.width = "100%";
+  finish();
+}
+$("#b-start").onclick = runTrials;
+
+/* =====================================================================
+   ENVÍO / RESPALDO
+   ===================================================================== */
+const META_FIELDS = ["start_iso","edad","sexo","vision_color","source","pilot","user_agent","screen_w","screen_h","dpr","color_gamut_p3","dark_mode","touch","tz"];
+function buildRows(){ return rows.map(r => { const o = {...r}; META_FIELDS.forEach(f => o[f] = session[f] ?? ""); return o; }); }
+function toCSV(data){
+  const cols = Object.keys(data[0]);
+  const esc = v => { v = String(v ?? ""); return /[",\n]/.test(v) ? `"${v.replace(/"/g,'""')}"` : v; };
+  return [cols.join(","), ...data.map(r => cols.map(c => esc(r[c])).join(","))].join("\n");
+}
+function downloadCSV(data){
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob(["﻿"+toCSV(data)], {type:"text/csv"}));
+  a.download = `${session.participant}_${CONFIG.EXP_NAME}.csv`; a.click();
+}
+async function send(payload){
+  // text/plain evita el preflight CORS con Apps Script
+  const res = await fetch(CONFIG.ENDPOINT, {method:"POST", body: JSON.stringify(payload)});
+  const j = await res.json();
+  if (!j.ok) throw new Error(j.error || "Error del servidor");
+  return j;
+}
+async function finish(){
+  show("#s-end");
+  const data = buildRows();
+  const payload = {participant: session.participant, exp_name: CONFIG.EXP_NAME, rows: data};
+  const st = $("#send-status");
+  $("#b-download").onclick = () => downloadCSV(data);
+  if (!CONFIG.ENDPOINT){
+    st.textContent = "Modo local (sin servidor configurado): descargue el CSV.";
+    $("#b-download").hidden = false; return;
+  }
+  localStorage.setItem("cs_pending_"+session.participant, JSON.stringify(payload));   // respaldo
+  const attempt = async () => {
+    st.className = "status"; st.textContent = "Guardando respuestas…"; $("#b-retry").hidden = true;
+    for (let i=0; i<3; i++){
+      try { await send(payload);
+        localStorage.removeItem("cs_pending_"+session.participant);
+        st.className = "status ok"; st.textContent = "Respuestas guardadas correctamente. Ya puede cerrar esta página."; return;
+      } catch(e){ await sleep(1500*(i+1)); }
+    }
+    st.className = "status err"; st.textContent = "No se pudo enviar. Revise su conexión y pulse “Reintentar”. No cierre la página.";
+    $("#b-retry").hidden = false; $("#b-download").hidden = false;
+  };
+  $("#b-retry").onclick = attempt;
+  attempt();
+}
+// Reenvío silencioso de envíos pendientes de sesiones anteriores en este dispositivo
+if (CONFIG.ENDPOINT) Object.keys(localStorage).filter(k=>k.startsWith("cs_pending_")).forEach(k => {
+  send(JSON.parse(localStorage.getItem(k))).then(()=>localStorage.removeItem(k)).catch(()=>{});
+});
+// Aviso si intenta salir a mitad de la prueba
+window.addEventListener("beforeunload", e => { if (rows.length && rows.length < trials.length){ e.preventDefault(); e.returnValue=""; } });
+</script>
+</body>
+</html>
